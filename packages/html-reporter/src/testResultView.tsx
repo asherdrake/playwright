@@ -27,6 +27,7 @@ import { ImageDiffView } from '@web/shared/imageDiffView';
 import { TestErrorView, TestScreenshotErrorView } from './testErrorView';
 import * as icons from './icons';
 import './testResultView.css';
+import { CheckBox } from './checkbox';
 
 interface ImageDiffWithAnchors extends ImageDiff {
   anchors: string[];
@@ -71,6 +72,7 @@ export const TestResultView: React.FC<{
   test: TestCase,
   result: TestResult,
 }> = ({ test, result }) => {
+  const [showSnippets, setShowSnippets] = React.useState(true);
   const { screenshots, videos, traces, otherAttachments, diffs, errors, otherAttachmentAnchors, screenshotAnchors } = React.useMemo(() => {
     const attachments = result.attachments;
     const screenshots = new Set(attachments.filter(a => a.contentType.startsWith('image/')));
@@ -94,6 +96,9 @@ export const TestResultView: React.FC<{
       })}
     </AutoChip>}
     {!!result.steps.length && <AutoChip header='Test Steps'>
+    <CheckBox checkBoxSettings={[
+      { value: showSnippets, set: setShowSnippets, name: "Show Snippets" }
+    ]} />
       {result.steps.map((step, i) => <StepTreeItem key={`step-${i}`} step={step} result={result} test={test} depth={0}/>)}
     </AutoChip>}
 
