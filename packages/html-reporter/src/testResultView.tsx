@@ -95,12 +95,12 @@ export const TestResultView: React.FC<{
         return <TestErrorView key={'test-result-error-message-' + index} error={error.error!}></TestErrorView>;
       })}
     </AutoChip>}
-    {!!result.steps.length && <AutoChip header='Test Steps'>
-    <CheckBox checkBoxSettings={[
-      { value: showSnippets, set: setShowSnippets, name: "Show Snippets" }
-    ]} />
+    {!!result.steps.length && <div className={!showSnippets ? 'test-result-hide-snippets' : ''}>
+      <AutoChip header='Test Steps' >
+        <CheckBox checkBoxSettings={[{ value: showSnippets, set: setShowSnippets, name: "Show Snippets" }]} />
       {result.steps.map((step, i) => <StepTreeItem key={`step-${i}`} step={step} result={result} test={test} depth={0}/>)}
-    </AutoChip>}
+      </AutoChip>
+    </div>}
 
     {diffs.map((diff, index) =>
       <Anchor key={`diff-${index}`} id={diff.anchors}>
