@@ -45,10 +45,6 @@
   padding: 2px 8px;
 }
 
-.test-result-hide-snippets [data-testid="test-snippet"] {
-  display: none;
-}
-
 @media(prefers-color-scheme: light) {
   .test-result-counter {
     background: var(--color-scale-gray-5);

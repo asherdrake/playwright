@@ -95,12 +95,10 @@ export const TestResultView: React.FC<{
         return <TestErrorView key={'test-result-error-message-' + index} error={error.error!}></TestErrorView>;
       })}
     </AutoChip>}
-    {!!result.steps.length && <div className={!showSnippets ? 'test-result-hide-snippets' : ''}>
-      <AutoChip header='Test Steps' >
+    {!!result.steps.length && <AutoChip header='Test Steps'>
         <CheckBox checkBoxSettings={[{ value: showSnippets, set: setShowSnippets, name: "Show Snippets" }]} />
-      {result.steps.map((step, i) => <StepTreeItem key={`step-${i}`} step={step} result={result} test={test} depth={0}/>)}
-      </AutoChip>
-    </div>}
+      {result.steps.map((step, i) => <StepTreeItem key={`step-${i}`} step={step} result={result} test={test} depth={0} showSnippets={showSnippets}/>)}
+      </AutoChip>}
 
     {diffs.map((diff, index) =>
       <Anchor key={`diff-${index}`} id={diff.anchors}>
@@ -177,8 +175,9 @@ const StepTreeItem: React.FC<{
   test: TestCase;
   result: TestResult;
   step: TestStep;
-  depth: number,
-}> = ({ test, step, result, depth }) => {
+  depth: number;
+  showSnippets: boolean;
+}> = ({ test, step, result, depth, showSnippets }) => {
   return <TreeItem title={<span aria-label={step.title}>
     <span style={{ float: 'right' }}>{msToString(step.duration)}</span>
     {step.attachments.length > 0 && <a style={{ float: 'right' }} title={`reveal attachment`} href={testResultHref({ test, result, anchor: `attachment-${step.attachments[0]}` })} onClick={evt => { evt.stopPropagation(); }}>{icons.attachment()}</a>}
@@ -186,9 +185,9 @@ const StepTreeItem: React.FC<{
     <span>{step.title}</span>
     {step.count > 1 && <> ✕ <span className='test-result-counter'>{step.count}</span></>}
     {step.location && <span className='test-result-path'>— {step.location.file}:{step.location.line}</span>}
-  </span>} loadChildren={step.steps.length || step.snippet ? () => {
-    const snippet = step.snippet ? [<TestErrorView testId='test-snippet' key='line' error={step.snippet}/>] : [];
-    const steps = step.steps.map((s, i) => <StepTreeItem key={i} step={s} depth={depth + 1} result={result} test={test} />);
+  </span>} loadChildren={step.steps.length || (step.snippet && showSnippets) ? () => {
+    const snippet = (step.snippet && showSnippets) ? [<TestErrorView testId='test-snippet' key='line' error={step.snippet}/>] : [];
+    const steps = step.steps.map((s, i) => <StepTreeItem key={i} step={s} depth={depth + 1} result={result} test={test} showSnippets={showSnippets}/>);
     return snippet.concat(steps);
   } : undefined} depth={depth}/>;
 };
