@@ -15,6 +15,8 @@
 */
 
 import * as React from 'react';
+import './checkbox.css';
+
 export type Check<T> = {
     value: T;
     set: (value: T) => void;
@@ -33,6 +35,7 @@ export const CheckBox: React.FunctionComponent<{
         return (
         <div key={name} className='setting' title={title}>
             <input
+                className = 'default'
                 type='checkbox'
                 id={labelId}
                 checked={value}

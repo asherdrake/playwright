@@ -13,3 +13,11 @@
   See the License for the specific language governing permissions and
   limitations under the License.
 */
+.setting {
+  line-height: 38px;
+  padding-left: 9px;
+}
+
+.default {
+  margin-right: 7px;
+}
