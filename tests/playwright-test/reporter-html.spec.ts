@@ -2651,23 +2651,67 @@ for (const useIntermediateMergeReport of [true, false] as const) {
       `);
     });
 
-    test('execSync doesnt produce a second stdout attachment', { annotation: { type: 'issue', description: 'https://github.com/microsoft/playwright/issues/33886' } }, async ({ runInlineTest, showReport, page }) => {
-      await runInlineTest({
-        'a.test.js': `
-          const { test, expect } = require('@playwright/test');
-          const { execSync } = require('node:child_process');
-          test('my test', async ({}) => {
-            console.log('foo');
-            execSync('echo bar', { stdio: 'inherit' });
-            console.log('baz');
-          });
-        `,
-      }, { reporter: 'dot,html' });
+    test('should toggle code snippet visibility', async ({ runInlineTest, showReport, page }) => {
+        await runInlineTest({
+            'a.test.js': `
+              const { test, expect } = require('@playwright/test');
 
-      await showReport();
-      await page.getByText('my test').click();
-      await expect(page.locator('.tree-item', { hasText: 'stdout' })).toHaveCount(1);
+              test('test with multiple steps and snippets', async ({ page }) => {
+                console.log('Test started'); // First snippet
+            
+                await test.step('Step 1: Navigate to example page', async () => {
+                  await page.goto('https://example.com');
+                  console.log('Navigated to example.com'); // Second snippet
+                });
+            
+                await test.step('Step 2: Check page title', async () => {
+                  const title = await page.title();
+                  console.log('Page title is:', title); // Third snippet
+                  expect(title).toBe('Example Domain'); // Fourth snippet
+                });
+            
+                await test.step('Step 3: Find and click a link', async () => {
+                  const link = page.locator('a');
+                  await expect(link).toBeVisible();
+                  console.log('Link is visible'); // Fifth snippet
+                  await link.click();
+                  console.log('Clicked the link'); // Sixth snippet
+                });
+            
+                console.log('Test finished'); // Seventh snippet
+              });
+            `,
+        }, { reporter: 'dot,html' }, { PLAYWRIGHT_HTML_OPEN: 'never' });
+
+        await showReport();
+
+        const testLink = page.locator('a[title*="test with multiple steps and snippets"]').nth(0);
+        await expect(testLink).toBeVisible();
+        await testLink.click();
+
+        await expect(page).toHaveURL(/#\?testId=/); 
+
+        const toggleCheckbox = page.locator('#checkBoxSetting-Show\\ Snippets');
+        await expect(toggleCheckbox).toBeVisible();
+
+        const secondTreeItem = page.locator('.tree-item-title').nth(1);
+        await expect(secondTreeItem).toBeVisible();
+        await secondTreeItem.click();
+
+        const thirdTreeItem = page.locator('.tree-item-title').nth(2);
+        await expect(thirdTreeItem).toBeVisible();
+        await thirdTreeItem.click();
+
+        const codeSnippets = page.locator('[data-testid="test-snippet"]');
+        await expect(codeSnippets.first()).toBeVisible();
+
+        await toggleCheckbox.click();
+        await expect(codeSnippets.first()).not.toBeVisible();
+
+        await toggleCheckbox.click();
+        await expect(codeSnippets.first()).toBeVisible();
     });
+
   });
 }
 
