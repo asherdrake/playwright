@@ -14,11 +14,13 @@
  * limitations under the License.
  */
 
-import type { EnvProducedPayload, ProcessInitParams, TestInfoErrorImpl } from './ipc';
-import { startProfiling, stopProfiling } from 'playwright-core/lib/utils';
+import { setTimeOrigin, startProfiling, stopProfiling } from 'playwright-core/lib/utils';
+
 import { serializeError } from '../util';
 import { registerESMLoader } from './esmLoaderHost';
 import { execArgvWithoutExperimentalLoaderOptions } from '../transform/esmUtils';
+
+import type { EnvProducedPayload, ProcessInitParams, TestInfoErrorImpl } from './ipc';
 
 export type ProtocolRequest = {
   id: number;
@@ -67,6 +69,7 @@ process.on('message', async (message: any) => {
   if (message.method === '__init__') {
     const { processParams, runnerParams, runnerScript } = message.params as { processParams: ProcessInitParams, runnerParams: any, runnerScript: string };
     void startProfiling();
+    setTimeOrigin(processParams.timeOrigin);
     const { create } = require(runnerScript);
     processRunner = create(runnerParams) as ProcessRunner;
     processName = processParams.processName;

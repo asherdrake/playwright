@@ -15,17 +15,22 @@
  */
 
 
-import type { LocatorEx } from './matchers';
-import type { ExpectMatcherState } from '../../types/test';
-import { kNoElementsFoundError, matcherHint, type MatcherResult } from './matcherHint';
-import { EXPECTED_COLOR } from '../common/expectBundle';
-import { callLogText, sanitizeFilePathBeforeExtension, trimLongString } from '../util';
-import { printReceivedStringContainExpectedSubstring } from './expect';
-import { currentTestInfo } from '../common/globals';
-import type { MatcherReceived } from '@injected/ariaSnapshot';
-import { escapeTemplateString, isString, sanitizeForFilePath } from 'playwright-core/lib/utils';
 import fs from 'fs';
 import path from 'path';
+
+import { escapeTemplateString, isString, sanitizeForFilePath } from 'playwright-core/lib/utils';
+
+import {  kNoElementsFoundError, matcherHint } from './matcherHint';
+import { EXPECTED_COLOR } from '../common/expectBundle';
+import { callLogText, fileExistsAsync, sanitizeFilePathBeforeExtension, trimLongString } from '../util';
+import { printReceivedStringContainExpectedSubstring } from './expect';
+import { currentTestInfo } from '../common/globals';
+
+import type { MatcherResult } from './matcherHint';
+import type { LocatorEx } from './matchers';
+import type { ExpectMatcherState } from '../../types/test';
+import type { MatcherReceived } from '@injected/ariaSnapshot';
+
 
 type ToMatchAriaSnapshotExpected = {
   name?: string;
@@ -65,7 +70,8 @@ export async function toMatchAriaSnapshot(
     timeout = options.timeout ?? this.timeout;
   } else {
     if (expectedParam?.name) {
-      expectedPath = testInfo._resolveSnapshotPath(pathTemplate, defaultTemplate, [sanitizeFilePathBeforeExtension(expectedParam.name)]);
+      const ext = expectedParam.name!.endsWith('.aria.yml') ? '.aria.yml' : undefined;
+      expectedPath = testInfo._resolveSnapshotPath(pathTemplate, defaultTemplate, [sanitizeFilePathBeforeExtension(expectedParam.name, ext)]);
     } else {
       let snapshotNames = (testInfo as any)[snapshotNamesSymbol] as SnapshotNames;
       if (!snapshotNames) {
@@ -73,7 +79,14 @@ export async function toMatchAriaSnapshot(
         (testInfo as any)[snapshotNamesSymbol] = snapshotNames;
       }
       const fullTitleWithoutSpec = [...testInfo.titlePath.slice(1), ++snapshotNames.anonymousSnapshotIndex].join(' ');
-      expectedPath = testInfo._resolveSnapshotPath(pathTemplate, defaultTemplate, [sanitizeForFilePath(trimLongString(fullTitleWithoutSpec)) + '.yml']);
+      expectedPath = testInfo._resolveSnapshotPath(pathTemplate, defaultTemplate, [sanitizeForFilePath(trimLongString(fullTitleWithoutSpec))], '.aria.yml');
+      // in 1.51, we changed the default template to use .aria.yml extension
+      // for backwards compatibility, we check for the legacy .yml extension
+      if (!(await fileExistsAsync(expectedPath))) {
+        const legacyPath = testInfo._resolveSnapshotPath(pathTemplate, defaultTemplate, [sanitizeForFilePath(trimLongString(fullTitleWithoutSpec))], '.yml');
+        if (await fileExistsAsync(legacyPath))
+          expectedPath = legacyPath;
+      }
     }
     expected = await fs.promises.readFile(expectedPath, 'utf8').catch(() => '');
     timeout = expectedParam?.timeout ?? this.timeout;

@@ -125,7 +125,7 @@ class Workspace {
       }
       await maybeWriteJSON(pkg.packageJSONPath, pkg.packageJSON);
     }
-  
+
     // Re-run npm i to make package-lock dirty.
     child_process.execSync('npm i');
     return hasChanges;
@@ -168,8 +168,13 @@ const workspace = new Workspace(ROOT_PATH, [
     files: LICENCE_FILES,
   }),
   new PWPackage({
+    name: '@playwright/client',
+    path: path.join(ROOT_PATH, 'packages', 'playwright-client'),
+    files: LICENCE_FILES,
+  }),
+  new PWPackage({
     name: '@playwright/experimental-tools',
-    path: path.join(ROOT_PATH, 'packages', 'playwright-tools'),
+    path: path.join(ROOT_PATH, 'packages', 'playwright-mcp'),
     files: LICENCE_FILES,
   }),
   new PWPackage({

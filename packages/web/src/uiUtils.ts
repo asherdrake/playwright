@@ -14,8 +14,9 @@
   limitations under the License.
 */
 
-import type { EffectCallback } from 'react';
 import React from 'react';
+
+import type { EffectCallback } from 'react';
 
 // Recalculates the value when dependencies change.
 export function useAsyncMemo<T>(fn: () => Promise<T>, deps: React.DependencyList, initialValue: T, resetValue?: T) {
@@ -247,4 +248,14 @@ export function useFlash(): [boolean, EffectCallback] {
     return () => timeouts.forEach(clearTimeout);
   }, [setFlash]);
   return [flash, trigger];
+}
+
+export function useCookies() {
+  const cookies = React.useMemo(() => {
+    return document.cookie.split('; ').filter(v => v.includes('=')).map(kv => {
+      const separator = kv.indexOf('=');
+      return [kv.substring(0, separator), kv.substring(separator + 1)];
+    });
+  }, []);
+  return cookies;
 }

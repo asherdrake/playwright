@@ -14,8 +14,9 @@
  * limitations under the License.
  */
 
-import type { AriaRole } from '@isomorphic/ariaSnapshot';
 import { closestCrossShadow, elementSafeTagName, enclosingShadowRootOrDocument, getElementComputedStyle, isElementStyleVisibilityVisible, isVisibleTextNode, parentElementOrShadowHost } from './domUtils';
+
+import type { AriaRole } from '@isomorphic/ariaSnapshot';
 
 function hasExplicitAccessibleName(e: Element) {
   return e.hasAttribute('aria-label') || e.hasAttribute('aria-labelledby');
@@ -336,7 +337,7 @@ function trimFlatString(s: string): string {
 function asFlatString(s: string): string {
   // "Flat string" at https://w3c.github.io/accname/#terminology
   // Note that non-breaking spaces are preserved.
-  return s.split('\u00A0').map(chunk => chunk.replace(/\r\n/g, '\n').replace(/\s\s*/g, ' ')).join('\u00A0').trim();
+  return s.split('\u00A0').map(chunk => chunk.replace(/\r\n/g, '\n').replace(/[\u200b\u00ad]/g, '').replace(/\s\s*/g, ' ')).join('\u00A0').trim();
 }
 
 function queryInAriaOwned(element: Element, selector: string): Element[] {
@@ -1004,13 +1005,12 @@ function isNativelyDisabled(element: Element) {
   return isNativeFormControl && (element.hasAttribute('disabled') || belongsToDisabledFieldSet(element));
 }
 
-function belongsToDisabledFieldSet(element: Element | null): boolean {
-  if (!element)
+function belongsToDisabledFieldSet(element: Element): boolean {
+  const fieldSetElement = element?.closest('FIELDSET[DISABLED]');
+  if (!fieldSetElement)
     return false;
-  if (elementSafeTagName(element) === 'FIELDSET' && element.hasAttribute('disabled'))
-    return true;
-  // fieldset does not work across shadow boundaries.
-  return belongsToDisabledFieldSet(element.parentElement);
+  const legendElement = fieldSetElement.querySelector(':scope > LEGEND');
+  return !legendElement || !legendElement.contains(element);
 }
 
 function hasExplicitAriaDisabled(element: Element | undefined): boolean {

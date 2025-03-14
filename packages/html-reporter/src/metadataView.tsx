@@ -20,16 +20,10 @@ import './common.css';
 import './theme.css';
 import './metadataView.css';
 import type { Metadata } from '@playwright/test';
-import type { GitCommitInfo } from '@testIsomorphic/types';
+import type { CIInfo, GitCommitInfo, MetadataWithCommitInfo } from '@testIsomorphic/types';
 import { CopyToClipboardContainer } from './copyToClipboard';
 import { linkifyText } from '@web/renderUtils';
-
-type MetadataEntries = [string, unknown][];
-
-export function filterMetadata(metadata: Metadata): MetadataEntries {
-  // TODO: do not plumb actualWorkers through metadata.
-  return Object.entries(metadata).filter(([key]) => key !== 'actualWorkers');
-}
+import { SearchParamsContext } from './links';
 
 class ErrorBoundary extends React.Component<React.PropsWithChildren<{}>, { error: Error | null, errorInfo: React.ErrorInfo | null }> {
   override state: { error: Error | null, errorInfo: React.ErrorInfo | null } = {
@@ -57,50 +51,71 @@ class ErrorBoundary extends React.Component<React.PropsWithChildren<{}>, { error
   }
 }
 
-export const MetadataView: React.FC<{ metadataEntries: MetadataEntries }> = ({ metadataEntries }) => {
-  return <ErrorBoundary><InnerMetadataView metadataEntries={metadataEntries}/></ErrorBoundary>;
+export const MetadataView: React.FC<{ metadata: Metadata }> = params => {
+  return <ErrorBoundary><InnerMetadataView metadata={params.metadata}/></ErrorBoundary>;
 };
 
-const InnerMetadataView: React.FC<{ metadataEntries: MetadataEntries }> = ({ metadataEntries }) => {
-  const gitCommitInfo = metadataEntries.find(([key]) => key === 'git.commit.info')?.[1] as GitCommitInfo | undefined;
-  const entries = metadataEntries.filter(([key]) => key !== 'git.commit.info');
-  if (!gitCommitInfo && !entries.length)
-    return null;
+const InnerMetadataView: React.FC<{ metadata: Metadata }> = params => {
+  const searchParams = React.useContext(SearchParamsContext);
+  const commitInfo = params.metadata as MetadataWithCommitInfo;
+  const otherEntries = searchParams.has('show-metadata-other') ? Object.entries(params.metadata).filter(([key]) => !ignoreKeys.has(key)) : [];
+  const hasMetadata = commitInfo.ci || commitInfo.gitCommit || otherEntries.length > 0;
+  if (!hasMetadata)
+    return;
   return <div className='metadata-view'>
-    {gitCommitInfo && <>
-      <GitCommitInfoView info={gitCommitInfo}/>
-      {entries.length > 0 && <div className='metadata-separator' />}
-    </>}
-    {entries.map(([key, value]) => {
-      const valueString = typeof value !== 'object' || value === null || value === undefined ? String(value) : JSON.stringify(value);
-      const trimmedValue = valueString.length > 1000 ? valueString.slice(0, 1000) + '\u2026' : valueString;
-      return <div className='m-1 ml-5' key={key}>
-        <span style={{ fontWeight: 'bold' }} title={key}>{key}</span>
-        {valueString && <CopyToClipboardContainer value={valueString}>: <span title={trimmedValue}>{linkifyText(trimmedValue)}</span></CopyToClipboardContainer>}
-      </div>;
-    })}
+    {commitInfo.ci && !commitInfo.gitCommit && <CiInfoView info={commitInfo.ci}/>}
+    {commitInfo.gitCommit && <GitCommitInfoView ci={commitInfo.ci} commit={commitInfo.gitCommit}/>}
+    {otherEntries.length > 0 && (commitInfo.gitCommit || commitInfo.ci) && <div className='metadata-separator' />}
+    <div className='metadata-section metadata-properties' role='list'>
+      {otherEntries.map(([propertyName, value]) => {
+        const valueString = typeof value !== 'object' || value === null || value === undefined ? String(value) : JSON.stringify(value);
+        const trimmedValue = valueString.length > 1000 ? valueString.slice(0, 1000) + '\u2026' : valueString;
+        return (
+          <div key={propertyName} className='copyable-property' role='listitem'>
+            <CopyToClipboardContainer value={valueString}>
+              <span style={{ fontWeight: 'bold' }} title={propertyName}>{propertyName}</span>
+              : <span title={trimmedValue}>{linkifyText(trimmedValue)}</span>
+            </CopyToClipboardContainer>
+          </div>
+        );
+      })}
+    </div>
   </div>;
 };
 
-const GitCommitInfoView: React.FC<{ info: GitCommitInfo }> = ({ info }) => {
-  const email = info['revision.email'] ? ` <${info['revision.email']}>` : '';
-  const author = `${info['revision.author'] || ''}${email}`;
-  const shortTimestamp = Intl.DateTimeFormat(undefined, { dateStyle: 'medium' }).format(info['revision.timestamp']);
-  const longTimestamp = Intl.DateTimeFormat(undefined, { dateStyle: 'full', timeStyle: 'long' }).format(info['revision.timestamp']);
-  return <div className='hbox pl-4 pr-2 git-commit-info' style={{ alignItems: 'center' }}>
-    <div className='vbox'>
-      <a className='m-2' href={info['revision.link']} target='_blank' rel='noopener noreferrer'>
-        <span title={info['revision.subject'] || ''}>{info['revision.subject'] || ''}</span>
-      </a>
-      <div className='hbox m-2 mt-1'>
-        <div className='mr-1'>{author}</div>
-        <div title={longTimestamp}> on {shortTimestamp}</div>
-        {info['ci.link'] && <><span className='mx-2'>·</span><a href={info['ci.link']} target='_blank' rel='noopener noreferrer' title='CI/CD logs'>logs</a></>}
-      </div>
+const CiInfoView: React.FC<{ info: CIInfo }> = ({ info }) => {
+  const title = info.prTitle || `Commit ${info.commitHash}`;
+  const link = info.prHref || info.commitHref;
+  return <div className='metadata-section' role='list'>
+    <div role='listitem'>
+      <a href={link} target='_blank' rel='noopener noreferrer' title={title}>{title}</a>
     </div>
-    {!!info['revision.link'] && <a href={info['revision.link']} target='_blank' rel='noopener noreferrer'>
-      <span title='View commit details'>{info['revision.id']?.slice(0, 7) || 'unknown'}</span>
-    </a>}
-    {!info['revision.link'] && !!info['revision.id'] && <span>{info['revision.id'].slice(0, 7)}</span>}
   </div>;
+};
+
+const GitCommitInfoView: React.FC<{ ci?: CIInfo, commit: GitCommitInfo }> = ({ ci, commit }) => {
+  const title = ci?.prTitle || commit.subject;
+  const link = ci?.prHref || ci?.commitHref;
+  const email = ` <${commit.author.email}>`;
+  const author = `${commit.author.name}${email}`;
+  const shortTimestamp = Intl.DateTimeFormat(undefined, { dateStyle: 'medium' }).format(commit.committer.time);
+  const longTimestamp = Intl.DateTimeFormat(undefined, { dateStyle: 'full', timeStyle: 'long' }).format(commit.committer.time);
+
+  return <div className='metadata-section' role='list'>
+    <div role='listitem'>
+      {link && <a href={link} target='_blank' rel='noopener noreferrer' title={title}>{title}</a>}
+      {!link && <span title={title}>{title}</span>}
+    </div>
+    <div role='listitem' className='hbox'>
+      <span className='mr-1'>{author}</span>
+      <span title={longTimestamp}> on {shortTimestamp}</span>
+    </div>
+  </div>;
+};
+
+const ignoreKeys = new Set(['ci', 'gitCommit', 'gitDiff', 'actualWorkers']);
+
+export const isMetadataEmpty = (metadata: MetadataWithCommitInfo): boolean => {
+  const otherEntries = Object.entries(metadata).filter(([key]) => !ignoreKeys.has(key));
+  return !metadata.ci && !metadata.gitCommit && !otherEntries.length;
 };

@@ -24,7 +24,7 @@ import { Anchor, AttachmentLink, generateTraceUrl, testResultHref } from './link
 import { statusIcon } from './statusIcon';
 import type { ImageDiff } from '@web/shared/imageDiffView';
 import { ImageDiffView } from '@web/shared/imageDiffView';
-import { TestErrorView, TestScreenshotErrorView } from './testErrorView';
+import { CodeSnippet, TestErrorView, TestScreenshotErrorView } from './testErrorView';
 import * as icons from './icons';
 import './testResultView.css';
 import { CheckBox } from './checkbox';
@@ -74,7 +74,7 @@ export const TestResultView: React.FC<{
 }> = ({ test, result }) => {
   const [showSnippets, setShowSnippets] = React.useState(true);
   const { screenshots, videos, traces, otherAttachments, diffs, errors, otherAttachmentAnchors, screenshotAnchors } = React.useMemo(() => {
-    const attachments = result.attachments;
+    const attachments = result.attachments.filter(a => !a.name.startsWith('_'));
     const screenshots = new Set(attachments.filter(a => a.contentType.startsWith('image/')));
     const screenshotAnchors = [...screenshots].map(a => `attachment-${attachments.indexOf(a)}`);
     const videos = attachments.filter(a => a.contentType.startsWith('video/'));
@@ -83,7 +83,7 @@ export const TestResultView: React.FC<{
     [...screenshots, ...videos, ...traces].forEach(a => otherAttachments.delete(a));
     const otherAttachmentAnchors = [...otherAttachments].map(a => `attachment-${attachments.indexOf(a)}`);
     const diffs = groupImageDiffs(screenshots, result);
-    const errors = classifyErrors(result.errors, diffs);
+    const errors = classifyErrors(result.errors, diffs, result.attachments);
     return { screenshots: [...screenshots], videos, traces, otherAttachments, diffs, errors, otherAttachmentAnchors, screenshotAnchors };
   }, [result]);
 
@@ -92,7 +92,7 @@ export const TestResultView: React.FC<{
       {errors.map((error, index) => {
         if (error.type === 'screenshot')
           return <TestScreenshotErrorView key={'test-result-error-message-' + index} errorPrefix={error.errorPrefix} diff={error.diff!} errorSuffix={error.errorSuffix}></TestScreenshotErrorView>;
-        return <TestErrorView key={'test-result-error-message-' + index} error={error.error!}></TestErrorView>;
+        return <TestErrorView key={'test-result-error-message-' + index} error={error.error!} prompt={error.prompt}></TestErrorView>;
       })}
     </AutoChip>}
     {!!result.steps.length && <div className={!showSnippets ? 'test-result-hide-snippets' : ''}>
@@ -149,8 +149,8 @@ export const TestResultView: React.FC<{
   </div>;
 };
 
-function classifyErrors(testErrors: string[], diffs: ImageDiff[]) {
-  return testErrors.map(error => {
+function classifyErrors(testErrors: string[], diffs: ImageDiff[], attachments: TestAttachment[]) {
+  return testErrors.map((error, i) => {
     const firstLine = error.split('\n')[0];
     if (firstLine.includes('toHaveScreenshot') || firstLine.includes('toMatchSnapshot')) {
       const matchingDiff = diffs.find(diff => {
@@ -169,7 +169,9 @@ function classifyErrors(testErrors: string[], diffs: ImageDiff[]) {
         return { type: 'screenshot', diff: matchingDiff, errorPrefix, errorSuffix };
       }
     }
-    return { type: 'regular', error };
+
+    const prompt = attachments.find(a => a.name === `_prompt-${i}`)?.body;
+    return { type: 'regular', error, prompt };
   });
 }
 
@@ -187,7 +189,7 @@ const StepTreeItem: React.FC<{
     {step.count > 1 && <> ✕ <span className='test-result-counter'>{step.count}</span></>}
     {step.location && <span className='test-result-path'>— {step.location.file}:{step.location.line}</span>}
   </span>} loadChildren={step.steps.length || step.snippet ? () => {
-    const snippet = step.snippet ? [<TestErrorView testId='test-snippet' key='line' error={step.snippet}/>] : [];
+    const snippet = step.snippet ? [<CodeSnippet testId='test-snippet' key='line' code={step.snippet} />] : [];
     const steps = step.steps.map((s, i) => <StepTreeItem key={i} step={s} depth={depth + 1} result={result} test={test} />);
     return snippet.concat(steps);
   } : undefined} depth={depth}/>;

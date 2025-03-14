@@ -15,28 +15,31 @@
  * limitations under the License.
  */
 
-import type { BrowserOptions } from '../browser';
 import path from 'path';
+
+import { assert } from '../../utils/isomorphic/assert';
+import { createGuid } from '../utils/crypto';
+import { Artifact } from '../artifact';
 import { Browser } from '../browser';
-import { assertBrowserContextIsNotOwned, BrowserContext, verifyGeolocation } from '../browserContext';
-import { assert, createGuid } from '../../utils';
-import * as network from '../network';
-import type { InitScript, Worker } from '../page';
-import { Page } from '../page';
+import { BrowserContext, assertBrowserContextIsNotOwned, verifyGeolocation } from '../browserContext';
 import { Frame } from '../frames';
-import type { Dialog } from '../dialog';
-import type { ConnectionTransport } from '../transport';
-import type * as types from '../types';
-import type * as channels from '@protocol/channels';
-import type { CRSession, CDPSession } from './crConnection';
-import { ConnectionEvents, CRConnection } from './crConnection';
+import * as network from '../network';
+import { Page } from '../page';
+import { CRConnection, ConnectionEvents } from './crConnection';
 import { CRPage } from './crPage';
 import { saveProtocolStream } from './crProtocolHelper';
-import type { Protocol } from './protocol';
-import type { CRDevTools } from './crDevTools';
 import { CRServiceWorker } from './crServiceWorker';
+
+import type { Dialog } from '../dialog';
+import type { InitScript, Worker } from '../page';
+import type { ConnectionTransport } from '../transport';
+import type * as types from '../types';
+import type { CDPSession, CRSession } from './crConnection';
+import type { CRDevTools } from './crDevTools';
+import type { Protocol } from './protocol';
+import type { BrowserOptions } from '../browser';
 import type { SdkObject } from '../instrumentation';
-import { Artifact } from '../artifact';
+import type * as channels from '@protocol/channels';
 
 export class CRBrowser extends Browser {
   readonly _connection: CRConnection;
@@ -370,27 +373,7 @@ export class CRBrowserContext extends BrowserContext {
 
   override async doCreateNewPage(): Promise<Page> {
     assertBrowserContextIsNotOwned(this);
-
-    const oldKeys = this._browser.isClank() ? new Set(this._browser._crPages.keys()) : undefined;
-
-    let { targetId } = await this._browser._session.send('Target.createTarget', { url: 'about:blank', browserContextId: this._browserContextId });
-
-    if (oldKeys) {
-      // Chrome for Android returns tab ids (1, 2, 3, 4, 5) instead of content target ids here, work around it via the
-      // heuristic assuming that there is only one page created at a time.
-      const newKeys = new Set(this._browser._crPages.keys());
-      // Remove old keys.
-      for (const key of oldKeys)
-        newKeys.delete(key);
-      // Remove potential concurrent popups.
-      for (const key of newKeys) {
-        const page = this._browser._crPages.get(key)!;
-        if (page._opener)
-          newKeys.delete(key);
-      }
-      assert(newKeys.size === 1);
-      [targetId] = [...newKeys];
-    }
+    const { targetId } = await this._browser._session.send('Target.createTarget', { url: 'about:blank', browserContextId: this._browserContextId });
     return this._browser._crPages.get(targetId)!._page;
   }
 

@@ -46,6 +46,7 @@ export type AriaTemplateRoleNode = AriaProps & {
   role: AriaRole | 'fragment';
   name?: AriaRegex | string;
   children?: AriaTemplateNode[];
+  props?: Record<string, string | AriaRegex>;
 };
 
 export type AriaTemplateNode = AriaTemplateRoleNode | AriaTemplateTextNode;
@@ -151,6 +152,21 @@ export function parseAriaSnapshot(yaml: YamlLibrary, text: string, options: yaml
         continue;
       }
 
+      // - /url: "about:blank"
+      if (key.value.startsWith('/')) {
+        const valueIsString = value instanceof yaml.Scalar && typeof value.value === 'string';
+        if (!valueIsString) {
+          errors.push({
+            message: 'Property value should be a string',
+            range: convertRange(((entry.value as any).range || map.range)),
+          });
+          continue;
+        }
+        container.props = container.props ?? {};
+        container.props[key.value.slice(1)] = valueOrRegex(value.value);
+        continue;
+      }
+
       // role "name": ...
       const childNode = KeyParser.parse(key, parseOptions, errors);
       if (!childNode)
@@ -220,7 +236,8 @@ export function parseAriaSnapshot(yaml: YamlLibrary, text: string, options: yaml
 const emptyFragment: AriaTemplateRoleNode = { kind: 'role', role: 'fragment' };
 
 function normalizeWhitespace(text: string) {
-  return text.replace(/[\r\n\s\t]+/g, ' ').trim();
+  // TODO: why is this different from normalizeWhitespace in stringUtils.ts?
+  return text.replace(/[\u200b\u00ad]/g, '').replace(/[\r\n\s\t]+/g, ' ').trim();
 }
 
 export function valueOrRegex(value: string): string | AriaRegex {

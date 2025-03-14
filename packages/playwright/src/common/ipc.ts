@@ -15,14 +15,17 @@
  */
 
 import util from 'util';
+
 import { serializeCompilationCache } from '../transform/compilationCache';
-import type { SerializedCompilationCache  } from '../transform/compilationCache';
+
 import type { ConfigLocation, FullConfigInternal } from './config';
 import type { ReporterDescription, TestInfoError, TestStatus } from '../../types/test';
 import type { MatcherResultProperty } from '../matchers/matcherHint';
+import type { SerializedCompilationCache  } from '../transform/compilationCache';
 
 export type ConfigCLIOverrides = {
   debug?: boolean;
+  failOnFlakyTests?: boolean;
   forbidOnly?: boolean;
   fullyParallel?: boolean;
   globalTimeout?: number;
@@ -49,9 +52,11 @@ export type SerializedConfig = {
   location: ConfigLocation;
   configCLIOverrides: ConfigCLIOverrides;
   compilationCache?: SerializedCompilationCache;
+  metadata?: string;
 };
 
 export type ProcessInitParams = {
+  timeOrigin: number;
   processName: string;
 };
 
@@ -145,6 +150,11 @@ export function serializeConfig(config: FullConfigInternal, passCompilationCache
     configCLIOverrides: config.configCLIOverrides,
     compilationCache: passCompilationCache ? serializeCompilationCache() : undefined,
   };
+
+  try {
+    result.metadata = JSON.stringify(config.config.metadata);
+  } catch (error) {}
+
   return result;
 }
 

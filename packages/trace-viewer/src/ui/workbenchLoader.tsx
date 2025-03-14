@@ -21,6 +21,7 @@ import './workbenchLoader.css';
 import { Workbench } from './workbench';
 import { TestServerConnection, WebSocketTestServerTransport } from '@testIsomorphic/testServerConnection';
 import { SettingsToolbarButton } from './settingsToolbarButton';
+import { LLMProvider } from './llm';
 
 export const WorkbenchLoader: React.FunctionComponent<{
 }> = () => {
@@ -70,6 +71,23 @@ export const WorkbenchLoader: React.FunctionComponent<{
     };
     document.addEventListener('paste', listener);
     return () => document.removeEventListener('paste', listener);
+  });
+  React.useEffect(() => {
+    const listener = (e: MessageEvent) => {
+      const { method, params } = e.data;
+
+      if (method !== 'load' || !(params?.trace instanceof Blob))
+        return;
+
+      const traceFile = new File([params.trace], 'trace.zip', { type: 'application/zip' });
+      const dataTransfer = new DataTransfer();
+
+      dataTransfer.items.add(traceFile);
+
+      processTraceFiles(dataTransfer.files);
+    };
+    window.addEventListener('message', listener);
+    return () => window.removeEventListener('message', listener);
   });
 
   const handleDropEvent = React.useCallback((event: React.DragEvent<HTMLDivElement>) => {
@@ -165,7 +183,9 @@ export const WorkbenchLoader: React.FunctionComponent<{
     <div className='progress'>
       <div className='inner-progress' style={{ width: progress.total ? (100 * progress.done / progress.total) + '%' : 0 }}></div>
     </div>
-    <Workbench model={model} inert={showFileUploadDropArea} />
+    <LLMProvider>
+      <Workbench model={model} inert={showFileUploadDropArea} />
+    </LLMProvider>
     {fileForLocalModeError && <div className='drop-target'>
       <div>Trace Viewer uses Service Workers to show traces. To view trace:</div>
       <div style={{ paddingTop: 20 }}>

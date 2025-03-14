@@ -349,6 +349,10 @@ interface TestProject<TestArgs = {}, WorkerArgs = {}> {
 
   /**
    * Project name is visible in the report and during test execution.
+   *
+   * **NOTE** Playwright executes the configuration file multiple times. Do not dynamically produce non-stable values in
+   * your configuration.
+   *
    */
   name?: string;
 
@@ -672,6 +676,47 @@ interface TestProject<TestArgs = {}, WorkerArgs = {}> {
    * option for all projects.
    */
   timeout?: number;
+
+  /**
+   * The maximum number of concurrent worker processes to use for parallelizing tests from this project. Can also be set
+   * as percentage of logical CPU cores, e.g. `'50%'.`
+   *
+   * This could be useful, for example, when all tests from a project share a single resource like a test account, and
+   * therefore cannot be executed in parallel. Limiting workers to one for such a project will prevent simultaneous use
+   * of the shared resource.
+   *
+   * Note that the global [testConfig.workers](https://playwright.dev/docs/api/class-testconfig#test-config-workers)
+   * limit applies to the total number of worker processes. However, Playwright will limit the number of workers used
+   * for this project by the value of
+   * [testProject.workers](https://playwright.dev/docs/api/class-testproject#test-project-workers).
+   *
+   * By default, there is no limit per project. See
+   * [testConfig.workers](https://playwright.dev/docs/api/class-testconfig#test-config-workers) for the default of the
+   * total worker limit.
+   *
+   * **Usage**
+   *
+   * ```js
+   * // playwright.config.ts
+   * import { defineConfig } from '@playwright/test';
+   *
+   * export default defineConfig({
+   *   workers: 10,  // total workers limit
+   *
+   *   projects: [
+   *     {
+   *       name: 'runs in parallel',
+   *     },
+   *     {
+   *       name: 'one at a time',
+   *       workers: 1,  // workers limit for this project
+   *     },
+   *   ],
+   * });
+   * ```
+   *
+   */
+  workers?: number|string;
 }
 
 export interface Project<TestArgs = {}, WorkerArgs = {}> extends TestProject<TestArgs, WorkerArgs> {
@@ -880,7 +925,7 @@ interface TestConfig<TestArgs = {}, WorkerArgs = {}> {
    * export default defineConfig({
    *   webServer: {
    *     command: 'npm run start',
-   *     url: 'http://127.0.0.1:3000',
+   *     url: 'http://localhost:3000',
    *     timeout: 120 * 1000,
    *     reuseExistingServer: !process.env.CI,
    *   },
@@ -911,19 +956,21 @@ interface TestConfig<TestArgs = {}, WorkerArgs = {}> {
    *   webServer: [
    *     {
    *       command: 'npm run start',
-   *       url: 'http://127.0.0.1:3000',
+   *       url: 'http://localhost:3000',
+   *       name: 'Frontend',
    *       timeout: 120 * 1000,
    *       reuseExistingServer: !process.env.CI,
    *     },
    *     {
    *       command: 'npm run backend',
-   *       url: 'http://127.0.0.1:3333',
+   *       url: 'http://localhost:3333',
+   *       name: 'Backend',
    *       timeout: 120 * 1000,
    *       reuseExistingServer: !process.env.CI,
    *     }
    *   ],
    *   use: {
-   *     baseURL: 'http://127.0.0.1:3000',
+   *     baseURL: 'http://localhost:3000',
    *   },
    * });
    * ```
@@ -953,6 +1000,44 @@ interface TestConfig<TestArgs = {}, WorkerArgs = {}> {
      * test uses are listed here.
      */
     external?: Array<string>;
+  };
+
+  /**
+   * These settings control whether git information is captured and stored in the config
+   * [testConfig.metadata](https://playwright.dev/docs/api/class-testconfig#test-config-metadata).
+   *
+   * **Usage**
+   *
+   * ```js
+   * // playwright.config.ts
+   * import { defineConfig } from '@playwright/test';
+   *
+   * export default defineConfig({
+   *   captureGitInfo: { commit: true, diff: true }
+   * });
+   * ```
+   *
+   * **Details**
+   * - Capturing `commit` information is useful when you'd like to see it in your HTML (or a third party) report.
+   * - Capturing `diff` information is useful to enrich the report with the actual source diff. This information can
+   *   be used to provide intelligent advice on how to fix the test.
+   *
+   * **NOTE** Default values for these settings depend on the environment. When tests run as a part of CI where it is
+   * safe to obtain git information, the default value is `true`, `false` otherwise.
+   *
+   * **NOTE** The structure of the git commit metadata is subject to change.
+   *
+   */
+  captureGitInfo?: {
+    /**
+     * Whether to capture commit and pull request information such as hash, author, timestamp.
+     */
+    commit?: boolean;
+
+    /**
+     * Whether to capture commit diff.
+     */
+    diff?: boolean;
   };
 
   /**
@@ -1091,6 +1176,25 @@ interface TestConfig<TestArgs = {}, WorkerArgs = {}> {
       timeout?: number;
     };
   };
+
+  /**
+   * Whether to exit with an error if any tests are marked as flaky. Useful on CI.
+   *
+   * Also available in the [command line](https://playwright.dev/docs/test-cli) with the `--fail-on-flaky-tests` option.
+   *
+   * **Usage**
+   *
+   * ```js
+   * // playwright.config.ts
+   * import { defineConfig } from '@playwright/test';
+   *
+   * export default defineConfig({
+   *   failOnFlakyTests: !!process.env.CI,
+   * });
+   * ```
+   *
+   */
+  failOnFlakyTests?: boolean;
 
   /**
    * Whether to exit with an error if any tests or groups are marked as
@@ -1281,10 +1385,6 @@ interface TestConfig<TestArgs = {}, WorkerArgs = {}> {
    * Metadata contains key-value pairs to be included in the report. For example, HTML report will display it as
    * key-value pairs, and JSON report will include metadata serialized as json.
    *
-   * See also
-   * [testConfig.populateGitInfo](https://playwright.dev/docs/api/class-testconfig#test-config-populate-git-info) that
-   * populates metadata.
-   *
    * **Usage**
    *
    * ```js
@@ -1355,27 +1455,6 @@ interface TestConfig<TestArgs = {}, WorkerArgs = {}> {
    *
    */
   outputDir?: string;
-
-  /**
-   * Whether to populate `'git.commit.info'` field of the
-   * [testConfig.metadata](https://playwright.dev/docs/api/class-testconfig#test-config-metadata) with Git commit info
-   * and CI/CD information.
-   *
-   * This information will appear in the HTML and JSON reports and is available in the Reporter API.
-   *
-   * **Usage**
-   *
-   * ```js
-   * // playwright.config.ts
-   * import { defineConfig } from '@playwright/test';
-   *
-   * export default defineConfig({
-   *   populateGitInfo: !!process.env.CI,
-   * });
-   * ```
-   *
-   */
-  populateGitInfo?: boolean;
 
   /**
    * Whether to preserve test output in the
@@ -1459,7 +1538,7 @@ interface TestConfig<TestArgs = {}, WorkerArgs = {}> {
     max: number;
 
     /**
-     * Test duration in milliseconds that is considered slow. Defaults to 15 seconds.
+     * Test file duration in milliseconds that is considered slow. Defaults to 5 minutes.
      */
     threshold: number;
   };
@@ -1852,6 +1931,12 @@ export interface FullConfig<TestArgs = {}, WorkerArgs = {}> {
   configFile?: string;
 
   /**
+   * See
+   * [testConfig.failOnFlakyTests](https://playwright.dev/docs/api/class-testconfig#test-config-fail-on-flaky-tests).
+   */
+  failOnFlakyTests: boolean;
+
+  /**
    * See [testConfig.forbidOnly](https://playwright.dev/docs/api/class-testconfig#test-config-forbid-only).
    */
   forbidOnly: boolean;
@@ -1911,12 +1996,12 @@ export interface FullConfig<TestArgs = {}, WorkerArgs = {}> {
    */
   reportSlowTests: null|{
     /**
-     * The maximum number of slow test files to report. Defaults to `5`.
+     * The maximum number of slow test files to report.
      */
     max: number;
 
     /**
-     * Test duration in milliseconds that is considered slow. Defaults to 15 seconds.
+     * Test file duration in milliseconds that is considered slow.
      */
     threshold: number;
   };
@@ -5814,7 +5899,11 @@ export interface TestType<TestArgs extends {}, WorkerArgs extends {}> {
   <T>(title: string, body: (step: TestStepInfo) => T | Promise<T>, options?: { box?: boolean, location?: Location, timeout?: number }): Promise<T>;
     /**
    * Mark a test step as "skip" to temporarily disable its execution, useful for steps that are currently failing and
-   * planned for a near-term fix. Playwright will not run the step.
+   * planned for a near-term fix. Playwright will not run the step. See also
+   * [testStepInfo.skip(condition[, description])](https://playwright.dev/docs/api/class-teststepinfo#test-step-info-skip-2).
+   *
+   * We recommend [testStepInfo.skip()](https://playwright.dev/docs/api/class-teststepinfo#test-step-info-skip-1)
+   * instead.
    *
    * **Usage**
    *
@@ -6055,7 +6144,7 @@ export interface PlaywrightWorkerOptions {
   /**
    * Whether to run browser in headless mode. More details for
    * [Chromium](https://developers.google.com/web/updates/2017/04/headless-chrome) and
-   * [Firefox](https://developer.mozilla.org/en-US/docs/Mozilla/Firefox/Headless_mode). Defaults to `true` unless the
+   * [Firefox](https://hacks.mozilla.org/2017/12/using-headless-mode-in-firefox/). Defaults to `true` unless the
    * [`devtools`](https://playwright.dev/docs/api/class-browsertype#browser-type-launch-option-devtools) option is
    * `true`.
    *
@@ -8486,7 +8575,8 @@ interface LocatorAssertions {
      * Specify locators that should be masked when the screenshot is taken. Masked elements will be overlaid with a pink
      * box `#FF00FF` (customized by
      * [`maskColor`](https://playwright.dev/docs/api/class-locatorassertions#locator-assertions-to-have-screenshot-1-option-mask-color))
-     * that completely covers its bounding box.
+     * that completely covers its bounding box. The mask is also applied to invisible elements, see
+     * [Matching only visible elements](https://playwright.dev/docs/locators#matching-only-visible-elements) to disable that.
      */
     mask?: Array<Locator>;
 
@@ -8578,7 +8668,8 @@ interface LocatorAssertions {
      * Specify locators that should be masked when the screenshot is taken. Masked elements will be overlaid with a pink
      * box `#FF00FF` (customized by
      * [`maskColor`](https://playwright.dev/docs/api/class-locatorassertions#locator-assertions-to-have-screenshot-2-option-mask-color))
-     * that completely covers its bounding box.
+     * that completely covers its bounding box. The mask is also applied to invisible elements, see
+     * [Matching only visible elements](https://playwright.dev/docs/locators#matching-only-visible-elements) to disable that.
      */
     mask?: Array<Locator>;
 
@@ -8785,14 +8876,14 @@ interface LocatorAssertions {
   /**
    * Asserts that the target element matches the given [accessibility snapshot](https://playwright.dev/docs/aria-snapshots).
    *
-   * Snapshot is stored in a separate `.yml` file in a location configured by `expect.toMatchAriaSnapshot.pathTemplate`
-   * and/or `snapshotPathTemplate` properties in the configuration file.
+   * Snapshot is stored in a separate `.aria.yml` file in a location configured by
+   * `expect.toMatchAriaSnapshot.pathTemplate` and/or `snapshotPathTemplate` properties in the configuration file.
    *
    * **Usage**
    *
    * ```js
    * await expect(page.locator('body')).toMatchAriaSnapshot();
-   * await expect(page.locator('body')).toMatchAriaSnapshot({ name: 'body.yml' });
+   * await expect(page.locator('body')).toMatchAriaSnapshot({ name: 'body.aria.yml' });
    * ```
    *
    * @param options
@@ -8894,13 +8985,25 @@ interface PageAssertions {
    * **Usage**
    *
    * ```js
-   * await expect(page).toHaveURL(/.*checkout/);
+   * // Check for the page URL to be 'https://playwright.dev/docs/intro' (including query string)
+   * await expect(page).toHaveURL('https://playwright.dev/docs/intro');
+   *
+   * // Check for the page URL to contain 'doc', followed by an optional 's', followed by '/'
+   * await expect(page).toHaveURL(/docs?\//);
+   *
+   * // Check for the predicate to be satisfied
+   * // For example: verify query strings
+   * await expect(page).toHaveURL(url => {
+   *   const params = url.searchParams;
+   *   return params.has('search') && params.has('options') && params.get('id') === '5';
+   * });
    * ```
    *
-   * @param url Expected URL string, RegExp, or predicate receiving [URL] to match. When a
-   * [`baseURL`](https://playwright.dev/docs/api/class-browser#browser-new-context-option-base-url) via the context
-   * options was provided and the passed URL is a path, it gets merged via the
-   * [`new URL()`](https://developer.mozilla.org/en-US/docs/Web/API/URL/URL) constructor.
+   * @param url Expected URL string, RegExp, or predicate receiving [URL] to match. When
+   * [`baseURL`](https://playwright.dev/docs/api/class-browser#browser-new-context-option-base-url) is provided via the
+   * context options and the `url` argument is a string, the two values are merged via the
+   * [`new URL()`](https://developer.mozilla.org/en-US/docs/Web/API/URL/URL) constructor and used for the comparison
+   * against the current browser URL.
    * @param options
    */
   toHaveURL(url: string|RegExp|((url: URL) => boolean), options?: {
@@ -9560,11 +9663,10 @@ export interface TestInfoError {
  * ```js
  * import { test, expect } from '@playwright/test';
  *
- * test('basic test', async ({ page, browserName }, TestStepInfo) => {
+ * test('basic test', async ({ page, browserName }) => {
  *   await test.step('check some behavior', async step => {
- *     await step.skip(browserName === 'webkit', 'The feature is not available in WebKit');
+ *     step.skip(browserName === 'webkit', 'The feature is not available in WebKit');
  *     // ... rest of the step code
- *     await page.check('input');
  *   });
  * });
  * ```
@@ -9572,14 +9674,110 @@ export interface TestInfoError {
  */
 export interface TestStepInfo {
   /**
-   * Unconditionally skip the currently running step. Test step is immediately aborted. This is similar to
-   * [test.step.skip(title, body[, options])](https://playwright.dev/docs/api/class-test#test-step-skip).
+   * Attach a value or a file from disk to the current test step. Some reporters show test step attachments. Either
+   * [`path`](https://playwright.dev/docs/api/class-teststepinfo#test-step-info-attach-option-path) or
+   * [`body`](https://playwright.dev/docs/api/class-teststepinfo#test-step-info-attach-option-body) must be specified,
+   * but not both. Calling this method will attribute the attachment to the step, as opposed to
+   * [testInfo.attach(name[, options])](https://playwright.dev/docs/api/class-testinfo#test-info-attach) which stores
+   * all attachments at the test level.
+   *
+   * For example, you can attach a screenshot to the test step:
+   *
+   * ```js
+   * import { test, expect } from '@playwright/test';
+   *
+   * test('basic test', async ({ page }) => {
+   *   await page.goto('https://playwright.dev');
+   *   await test.step('check page rendering', async step => {
+   *     const screenshot = await page.screenshot();
+   *     await step.attach('screenshot', { body: screenshot, contentType: 'image/png' });
+   *   });
+   * });
+   * ```
+   *
+   * Or you can attach files returned by your APIs:
+   *
+   * ```js
+   * import { test, expect } from '@playwright/test';
+   * import { download } from './my-custom-helpers';
+   *
+   * test('basic test', async ({}) => {
+   *   await test.step('check download behavior', async step => {
+   *     const tmpPath = await download('a');
+   *     await step.attach('downloaded', { path: tmpPath });
+   *   });
+   * });
+   * ```
+   *
+   * **NOTE**
+   * [testStepInfo.attach(name[, options])](https://playwright.dev/docs/api/class-teststepinfo#test-step-info-attach)
+   * automatically takes care of copying attached files to a location that is accessible to reporters. You can safely
+   * remove the attachment after awaiting the attach call.
+   *
+   * @param name Attachment name. The name will also be sanitized and used as the prefix of file name when saving to disk.
+   * @param options
+   */
+  attach(name: string, options?: {
+    /**
+     * Attachment body. Mutually exclusive with
+     * [`path`](https://playwright.dev/docs/api/class-teststepinfo#test-step-info-attach-option-path).
+     */
+    body?: string|Buffer;
+
+    /**
+     * Content type of this attachment to properly present in the report, for example `'application/json'` or
+     * `'image/png'`. If omitted, content type is inferred based on the
+     * [`path`](https://playwright.dev/docs/api/class-teststepinfo#test-step-info-attach-option-path), or defaults to
+     * `text/plain` for [string] attachments and `application/octet-stream` for [Buffer] attachments.
+     */
+    contentType?: string;
+
+    /**
+     * Path on the filesystem to the attached file. Mutually exclusive with
+     * [`body`](https://playwright.dev/docs/api/class-teststepinfo#test-step-info-attach-option-body).
+     */
+    path?: string;
+  }): Promise<void>;
+
+  /**
+   * Abort the currently running step and mark it as skipped. Useful for steps that are currently failing and planned
+   * for a near-term fix.
+   *
+   * **Usage**
+   *
+   * ```js
+   * import { test, expect } from '@playwright/test';
+   *
+   * test('my test', async ({ page }) => {
+   *   await test.step('check expectations', async step => {
+   *     step.skip();
+   *     // step body below will not run
+   *     // ...
+   *   });
+   * });
+   * ```
+   *
    */
   skip(): void;
 
   /**
-   * Conditionally skips the currently running step with an optional description. This is similar to
-   * [test.step.skip(title, body[, options])](https://playwright.dev/docs/api/class-test#test-step-skip).
+   * Conditionally abort the currently running step and mark it as skipped with an optional description. Useful for
+   * steps that should not be executed in some cases.
+   *
+   * **Usage**
+   *
+   * ```js
+   * import { test, expect } from '@playwright/test';
+   *
+   * test('my test', async ({ page, isMobile }) => {
+   *   await test.step('check desktop expectations', async step => {
+   *     step.skip(isMobile, 'not present in the mobile layout');
+   *     // step body below will not run
+   *     // ...
+   *   });
+   * });
+   * ```
+   *
    * @param condition A skip condition. Test step is skipped when the condition is `true`.
    * @param description Optional description that will be reflected in a test report.
    */
@@ -9674,7 +9872,8 @@ export interface PageAssertionsToHaveScreenshotOptions {
    * Specify locators that should be masked when the screenshot is taken. Masked elements will be overlaid with a pink
    * box `#FF00FF` (customized by
    * [`maskColor`](https://playwright.dev/docs/api/class-pageassertions#page-assertions-to-have-screenshot-1-option-mask-color))
-   * that completely covers its bounding box.
+   * that completely covers its bounding box. The mask is also applied to invisible elements, see
+   * [Matching only visible elements](https://playwright.dev/docs/locators#matching-only-visible-elements) to disable that.
    */
   mask?: Array<Locator>;
 
@@ -9748,9 +9947,27 @@ interface TestConfigWebServer {
   env?: { [key: string]: string; };
 
   /**
+   * How to shut down the process. If unspecified, the process group is forcefully `SIGKILL`ed. If set to `{ signal:
+   * 'SIGTERM', timeout: 500 }`, the process group is sent a `SIGTERM` signal, followed by `SIGKILL` if it doesn't exit
+   * within 500ms. You can also use `SIGINT` as the signal instead. A `0` timeout means no `SIGKILL` will be sent.
+   * Windows doesn't support `SIGTERM` and `SIGINT` signals, so this option is ignored on Windows. Note that shutting
+   * down a Docker container requires `SIGTERM`.
+   */
+  gracefulShutdown?: {
+    signal: "SIGINT"|"SIGTERM";
+
+    timeout: number;
+  };
+
+  /**
    * Whether to ignore HTTPS errors when fetching the `url`. Defaults to `false`.
    */
   ignoreHTTPSErrors?: boolean;
+
+  /**
+   * Specifies a custom name for the web server. This name will be prefixed to log messages. Defaults to `[WebServer]`.
+   */
+  name?: string;
 
   /**
    * The port that your http server is expected to appear on. It does wait until it accepts connections. Either `port`
@@ -9767,33 +9984,20 @@ interface TestConfigWebServer {
   reuseExistingServer?: boolean;
 
   /**
+   * Whether to pipe the stderr of the command to the process stderr or ignore it. Defaults to `"pipe"`.
+   */
+  stderr?: "pipe"|"ignore";
+
+  /**
    * If `"pipe"`, it will pipe the stdout of the command to the process stdout. If `"ignore"`, it will ignore the stdout
    * of the command. Default to `"ignore"`.
    */
   stdout?: "pipe"|"ignore";
 
   /**
-   * Whether to pipe the stderr of the command to the process stderr or ignore it. Defaults to `"pipe"`.
-   */
-  stderr?: "pipe"|"ignore";
-
-  /**
    * How long to wait for the process to start up and be available in milliseconds. Defaults to 60000.
    */
   timeout?: number;
-
-  /**
-   * How to shut down the process. If unspecified, the process group is forcefully `SIGKILL`ed. If set to `{ signal:
-   * 'SIGTERM', timeout: 500 }`, the process group is sent a `SIGTERM` signal, followed by `SIGKILL` if it doesn't exit
-   * within 500ms. You can also use `SIGINT` as the signal instead. A `0` timeout means no `SIGKILL` will be sent.
-   * Windows doesn't support `SIGTERM` and `SIGINT` signals, so this option is ignored on Windows. Note that shutting
-   * down a Docker container requires `SIGTERM`.
-   */
-  gracefulShutdown?: {
-    signal: "SIGINT"|"SIGTERM";
-
-    timeout: number;
-  };
 
   /**
    * The url on your http server that is expected to return a 2xx, 3xx, 400, 401, 402, or 403 status code when the

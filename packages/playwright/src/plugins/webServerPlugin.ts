@@ -13,14 +13,15 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-import path from 'path';
 import net from 'net';
+import path from 'path';
 
-import { colors, debug } from 'playwright-core/lib/utilsBundle';
-import { raceAgainstDeadline, launchProcess, monotonicTime, isURLAvailable } from 'playwright-core/lib/utils';
+import { launchProcess, isURLAvailable, monotonicTime, raceAgainstDeadline } from 'playwright-core/lib/utils';
+import { colors } from 'playwright-core/lib/utils';
+import { debug } from 'playwright-core/lib/utilsBundle';
 
-import type { FullConfig } from '../../types/testReporter';
 import type { TestRunnerPlugin } from '.';
+import type { FullConfig } from '../../types/testReporter';
 import type { FullConfigInternal } from '../common/config';
 import type { ReporterV2 } from '../reporters/reporterV2';
 
@@ -36,6 +37,7 @@ export type WebServerPluginOptions = {
   env?: { [key: string]: string; };
   stdout?: 'pipe' | 'ignore';
   stderr?: 'pipe' | 'ignore';
+  name?: string;
 };
 
 const DEFAULT_ENVIRONMENT_VARIABLES = {
@@ -135,11 +137,11 @@ export class WebServerPlugin implements TestRunnerPlugin {
 
     launchedProcess.stderr!.on('data', data => {
       if (debugWebServer.enabled || (this._options.stderr === 'pipe' || !this._options.stderr))
-        this._reporter!.onStdErr?.(prefixOutputLines(data.toString()));
+        this._reporter!.onStdErr?.(prefixOutputLines(data.toString(), this._options.name));
     });
     launchedProcess.stdout!.on('data', data => {
       if (debugWebServer.enabled || this._options.stdout === 'pipe')
-        this._reporter!.onStdOut?.(prefixOutputLines(data.toString()));
+        this._reporter!.onStdOut?.(prefixOutputLines(data.toString(), this._options.name));
     });
   }
 
@@ -222,12 +224,12 @@ export const webServerPluginsForConfig = (config: FullConfigInternal): TestRunne
   return webServerPlugins;
 };
 
-function prefixOutputLines(output: string) {
+function prefixOutputLines(output: string, prefixName: string = 'WebServer'): string {
   const lastIsNewLine = output[output.length - 1] === '\n';
   let lines = output.split('\n');
   if (lastIsNewLine)
     lines.pop();
-  lines = lines.map(line => colors.dim('[WebServer] ') + line);
+  lines = lines.map(line => colors.dim(`[${prefixName}] `) + line);
   if (lastIsNewLine)
     lines.push('');
   return lines.join('\n');

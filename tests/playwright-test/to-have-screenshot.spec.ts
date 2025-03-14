@@ -688,7 +688,9 @@ test('should attach missing expectations to right step', async ({ runInlineTest 
       }
       module.exports = Reporter;
     `,
-    ...playwrightConfig({ reporter: [['dot'], ['./reporter']] }),
+    ...playwrightConfig({
+      reporter: [['dot'], ['./reporter']],
+    }),
     'a.spec.js': `
       const { test, expect } = require('@playwright/test');
       test('is a test', async ({ page }) => {

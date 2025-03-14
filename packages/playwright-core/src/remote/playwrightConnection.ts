@@ -14,20 +14,22 @@
  * limitations under the License.
  */
 
-import type { WebSocket } from '../utilsBundle';
-import type { DispatcherScope, Playwright } from '../server';
-import type * as channels from '@protocol/channels';
-import { createPlaywright, DispatcherConnection, RootDispatcher, PlaywrightDispatcher } from '../server';
-import { Browser } from '../server/browser';
-import { serverSideCallMetadata } from '../server/instrumentation';
-import { SocksProxy } from '../common/socksProxy';
-import { assert, isUnderTest } from '../utils';
-import type { LaunchOptions } from '../server/types';
+import { SocksProxy } from '../server/utils/socksProxy';
+import { DispatcherConnection, PlaywrightDispatcher, RootDispatcher, createPlaywright } from '../server';
 import { AndroidDevice } from '../server/android/android';
+import { Browser } from '../server/browser';
 import { DebugControllerDispatcher } from '../server/dispatchers/debugControllerDispatcher';
-import { startProfiling, stopProfiling } from '../utils';
+import { serverSideCallMetadata } from '../server/instrumentation';
+import { assert } from '../utils/isomorphic/assert';
+import { isUnderTest } from '../server/utils/debug';
+import { startProfiling, stopProfiling } from '../server/utils/profiler';
 import { monotonicTime } from '../utils';
-import { debugLogger } from '../utils/debugLogger';
+import { debugLogger } from '../server/utils/debugLogger';
+
+import type { DispatcherScope, Playwright } from '../server';
+import type { LaunchOptions } from '../server/types';
+import type { WebSocket } from '../utilsBundle';
+import type * as channels from '@protocol/channels';
 
 export type ClientType = 'controller' | 'launch-browser' | 'reuse-browser' | 'pre-launched-browser-or-android';
 

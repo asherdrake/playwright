@@ -87,18 +87,6 @@ class BrowserTypeExamples
 
 ## async method: BrowserType.connect
 * since: v1.8
-* langs: js
-- returns: <[Browser]>
-
-This method attaches Playwright to an existing browser instance created via [`method: BrowserType.launchServer`].
-
-:::note
-The major and minor version of the Playwright instance that connects needs to match the version of Playwright that launches the browser (1.2.3 → is compatible with 1.2.x).
-:::
-
-## async method: BrowserType.connect
-* since: v1.8
-* langs: python, csharp, java
 - returns: <[Browser]>
 
 This method attaches Playwright to an existing browser instance created via `BrowserType.launchServer` in Node.js.
@@ -111,7 +99,7 @@ The major and minor version of the Playwright instance that connects needs to ma
 * since: v1.10
 - `wsEndpoint` <[string]>
 
-A Playwright browser websocket endpoint to connect to. You obtain this endpoint via [`method: BrowserServer.wsEndpoint`].
+A Playwright browser websocket endpoint to connect to. You obtain this endpoint via `BrowserServer.wsEndpoint`.
 
 ### option: BrowserType.connect.headers
 * since: v1.11
@@ -338,7 +326,7 @@ this context will automatically close the browser.
 
 Path to a User Data Directory, which stores browser session data like cookies and local storage. More details for
 [Chromium](https://chromium.googlesource.com/chromium/src/+/master/docs/user_data_dir.md#introduction) and
-[Firefox](https://developer.mozilla.org/en-US/docs/Mozilla/Command_Line_Options#User_Profile).
+[Firefox](https://wiki.mozilla.org/Firefox/CommandLineOptions#User_profile).
 Note that Chromium's user data directory is the **parent** directory of the "Profile Path" seen at `chrome://version`. Pass an empty string to
 use a temporary directory instead.
 

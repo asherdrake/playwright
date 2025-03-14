@@ -14,30 +14,36 @@
  * limitations under the License.
  */
 
-import type { SelectorEngine, SelectorRoot } from './selectorEngine';
-import { XPathEngine } from './xpathSelectorEngine';
-import { ReactEngine } from './reactSelectorEngine';
-import { VueEngine } from './vueSelectorEngine';
-import { createRoleEngine } from './roleSelectorEngine';
-import { parseAttributeSelector } from '../../utils/isomorphic/selectorParser';
-import type { NestedSelectorBody, ParsedSelector, ParsedSelectorPart } from '../../utils/isomorphic/selectorParser';
-import { visitAllSelectorParts, parseSelector, stringifySelector } from '../../utils/isomorphic/selectorParser';
-import { type TextMatcher, elementMatchesText, elementText, type ElementText, getElementLabels } from './selectorUtils';
-import { SelectorEvaluatorImpl, sortInDOMOrder } from './selectorEvaluator';
-import { enclosingShadowRootOrDocument, isElementVisible, isInsideScope, parentElementOrShadowHost, setBrowserName } from './domUtils';
-import type { CSSComplexSelectorList } from '../../utils/isomorphic/cssParser';
-import { generateSelector, type GenerateSelectorOptions } from './selectorGenerator';
-import type * as channels from '@protocol/channels';
-import { Highlight } from './highlight';
-import { getAriaDisabled, getAriaRole, getElementAccessibleName, getElementAccessibleDescription, getReadonly, getElementAccessibleErrorMessage, getCheckedAllowMixed, getCheckedWithoutMixed } from './roleUtils';
-import { kLayoutSelectorNames, type LayoutSelectorName, layoutSelectorScore } from './layoutSelectorUtils';
-import { asLocator } from '../../utils/isomorphic/locatorGenerators';
-import type { Language } from '../../utils/isomorphic/locatorGenerators';
-import { cacheNormalizedWhitespaces, normalizeWhiteSpace, trimStringWithEllipsis } from '../../utils/isomorphic/stringUtils';
-import { matchesAriaTree, getAllByAria, generateAriaTree, renderAriaTree } from './ariaSnapshot';
-import type { AriaNode, AriaSnapshot } from './ariaSnapshot';
-import type { AriaTemplateNode } from '@isomorphic/ariaSnapshot';
 import { parseAriaSnapshot } from '@isomorphic/ariaSnapshot';
+
+import { generateAriaTree, getAllByAria, matchesAriaTree, renderAriaTree } from './ariaSnapshot';
+import { enclosingShadowRootOrDocument, isElementVisible, isInsideScope, parentElementOrShadowHost, setBrowserName } from './domUtils';
+import { Highlight } from './highlight';
+import { kLayoutSelectorNames,  layoutSelectorScore } from './layoutSelectorUtils';
+import { ReactEngine } from './reactSelectorEngine';
+import { createRoleEngine } from './roleSelectorEngine';
+import { getAriaDisabled, getAriaRole, getCheckedAllowMixed, getCheckedWithoutMixed, getElementAccessibleDescription, getElementAccessibleErrorMessage, getElementAccessibleName, getReadonly } from './roleUtils';
+import { SelectorEvaluatorImpl, sortInDOMOrder } from './selectorEvaluator';
+import { generateSelector  } from './selectorGenerator';
+import {  elementMatchesText, elementText,  getElementLabels } from './selectorUtils';
+import { VueEngine } from './vueSelectorEngine';
+import { XPathEngine } from './xpathSelectorEngine';
+import { asLocator } from '../../utils/isomorphic/locatorGenerators';
+import { parseAttributeSelector } from '../../utils/isomorphic/selectorParser';
+import { parseSelector, stringifySelector, visitAllSelectorParts } from '../../utils/isomorphic/selectorParser';
+import { cacheNormalizedWhitespaces, normalizeWhiteSpace, trimStringWithEllipsis } from '../../utils/isomorphic/stringUtils';
+
+import type { AriaSnapshot } from './ariaSnapshot';
+import type { LayoutSelectorName } from './layoutSelectorUtils';
+import type { SelectorEngine, SelectorRoot } from './selectorEngine';
+import type { GenerateSelectorOptions } from './selectorGenerator';
+import type { ElementText, TextMatcher } from './selectorUtils';
+import type { CSSComplexSelectorList } from '../../utils/isomorphic/cssParser';
+import type { Language } from '../../utils/isomorphic/locatorGenerators';
+import type { NestedSelectorBody, ParsedSelector, ParsedSelectorPart } from '../../utils/isomorphic/selectorParser';
+import type { AriaTemplateNode } from '@isomorphic/ariaSnapshot';
+import type * as channels from '@protocol/channels';
+
 
 export type FrameExpectParams = Omit<channels.FrameExpectParams, 'expectedValue'> & { expectedValue?: any };
 
@@ -72,7 +78,7 @@ export class InjectedScript {
   // eslint-disable-next-line no-restricted-globals
   readonly window: Window & typeof globalThis;
   readonly document: Document;
-  private _ariaElementById: Map<number, Element> | undefined;
+  private _lastAriaSnapshot: AriaSnapshot | undefined;
 
   // Recorder must use any external dependencies through InjectedScript.
   // Otherwise it will end up with a copy of all modules it uses, and any
@@ -131,7 +137,7 @@ export class InjectedScript {
     this._engines.set('internal:attr', this._createNamedAttributeEngine());
     this._engines.set('internal:testid', this._createNamedAttributeEngine());
     this._engines.set('internal:role', createRoleEngine(true));
-    this._engines.set('internal:aria-id', this._createAriaIdEngine());
+    this._engines.set('aria-ref', this._createAriaIdEngine());
 
     for (const { name, engine } of customEngines)
       this._engines.set(name, engine);
@@ -219,28 +225,16 @@ export class InjectedScript {
     return new Set<Element>(result.map(r => r.element));
   }
 
-  ariaSnapshot(node: Node, options?: { mode?: 'raw' | 'regex', id?: boolean }): string {
+  ariaSnapshot(node: Node, options?: { mode?: 'raw' | 'regex', ref?: boolean }): string {
     if (node.nodeType !== Node.ELEMENT_NODE)
       throw this.createStacklessError('Can only capture aria snapshot of Element nodes.');
-    const ariaSnapshot = generateAriaTree(node as Element);
-    this._ariaElementById = ariaSnapshot.elements;
-    return renderAriaTree(ariaSnapshot.root, { ...options, ids: options?.id ? ariaSnapshot.ids : undefined });
-  }
-
-  ariaSnapshotAsObject(node: Node): AriaSnapshot {
-    return generateAriaTree(node as Element);
+    const generation = (this._lastAriaSnapshot?.generation || 0) + 1;
+    this._lastAriaSnapshot = generateAriaTree(node as Element, generation);
+    return renderAriaTree(this._lastAriaSnapshot, options);
   }
 
   ariaSnapshotElement(snapshot: AriaSnapshot, elementId: number): Element | null {
     return snapshot.elements.get(elementId) || null;
-  }
-
-  renderAriaTree(ariaNode: AriaNode, options?: { mode?: 'raw' | 'regex', id?: boolean}): string {
-    return renderAriaTree(ariaNode, options);
-  }
-
-  renderAriaSnapshotWithIds(ariaSnapshot: AriaSnapshot): string {
-    return renderAriaTree(ariaSnapshot.root, { ids: ariaSnapshot.ids });
   }
 
   getAllByAria(document: Document, template: AriaTemplateNode): Element[] {
@@ -614,8 +608,13 @@ export class InjectedScript {
 
   _createAriaIdEngine() {
     const queryAll = (root: SelectorRoot, selector: string): Element[] => {
-      const ariaId = parseInt(selector, 10);
-      const result = this._ariaElementById?.get(ariaId);
+      const match = selector.match(/^s(\d+)e(\d+)$/);
+      if (!match)
+        throw this.createStacklessError('Invalid aria-ref selector, should be of form s<number>e<number>');
+      const [, generation, elementId] = match;
+      if (this._lastAriaSnapshot?.generation !== +generation)
+        throw this.createStacklessError(`Stale aria-ref, expected s${this._lastAriaSnapshot?.generation}e{number}, got ${selector}`);
+      const result = this._lastAriaSnapshot?.elements?.get(+elementId);
       return result && result.isConnected ? [result] : [];
     };
     return { queryAll };
@@ -1416,6 +1415,8 @@ export class InjectedScript {
         received = getAriaRole(element) || '';
       } else if (expression === 'to.have.title') {
         received = this.document.title;
+      } else if (expression === 'to.have.url') {
+        received = this.document.location.href;
       } else if (expression === 'to.have.value') {
         element = this.retarget(element, 'follow-label')!;
         if (element.nodeName !== 'INPUT' && element.nodeName !== 'TEXTAREA' && element.nodeName !== 'SELECT')
