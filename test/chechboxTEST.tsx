@@ -25,26 +25,23 @@ export const CheckBox: React.FunctionComponent<{
     checkBoxSettings: Check<boolean>[];
   }> = ({ checkBoxSettings }) => {
     return (
-        <>
+      <>
         {checkBoxSettings.map(({ value, set, name, title }) => {
-        const labelId = `checkBoxSetting-${name}`;
+          const labelId = `checkBoxSetting-${name}`;
 
-        return (
-        <div key={name} className='setting' title={title}>
-            <input
+          return (
+            <div key={name} className='setting' title={title}>
+              <input
                 className = 'default'
                 type='checkbox'
                 id={labelId}
                 checked={value}
                 onChange={() => set(!value)}
-            />
-            <label htmlFor={labelId}>{name}</label>
-        </div>
-        );
-    })}
-        </>
-    )
-
-
-
-}
+              />
+              <label htmlFor={labelId}>{name}</label>
+            </div>
+          );
+        })}
+      </>
+    );
+  };
